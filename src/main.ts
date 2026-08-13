@@ -21,6 +21,7 @@ import {
 	refreshAccessToken,
 } from './stravaApi';
 import { formatActivity } from './format';
+import { isSkippedActivity } from './filter';
 import type { StravaActivity, StravaRateLimit } from './types';
 
 /**
@@ -263,30 +264,44 @@ export default class StravaSync extends Plugin {
 				return;
 			}
 
-			// Folder tworzymy dopiero teraz, gdy wiemy, że jest co zapisać.
-			const folderPath = normalizePath(this.settings.activitiesFolder);
-			await this.ensureFolder(folderPath);
+			// Odsiewamy treningi siłowe (patrz filter.ts) — dla nich notatek
+			// nie tworzymy, bo mamy je już z pluginu hevy-sync.
+			const toWrite = activities.filter(
+				(activity) => !isSkippedActivity(activity),
+			);
+			const skipped = activities.length - toWrite.length;
 
 			let created = 0;
 			let updated = 0;
 
-			for (const activity of activities) {
-				const markdown = formatActivity(activity);
-				// ID aktywności jest liczbą i nigdy nie zawiera znaków
-				// zakazanych w nazwach plików — nie trzeba go czyścić.
-				const path = normalizePath(`${folderPath}/${activity.id}.md`);
+			// Gdy po odsianiu nic nie zostało, nie zakładamy nawet folderu.
+			if (toWrite.length > 0) {
+				const folderPath = normalizePath(this.settings.activitiesFolder);
+				await this.ensureFolder(folderPath);
 
-				const existing = this.app.vault.getAbstractFileByPath(path);
-				if (existing instanceof TFile) {
-					await this.app.vault.modify(existing, markdown);
-					updated++;
-				} else {
-					await this.app.vault.create(path, markdown);
-					created++;
+				for (const activity of toWrite) {
+					const markdown = formatActivity(activity);
+					// ID aktywności jest liczbą i nigdy nie zawiera znaków
+					// zakazanych w nazwach plików — nie trzeba go czyścić.
+					const path = normalizePath(`${folderPath}/${activity.id}.md`);
+
+					const existing = this.app.vault.getAbstractFileByPath(path);
+					if (existing instanceof TFile) {
+						await this.app.vault.modify(existing, markdown);
+						updated++;
+					} else {
+						await this.app.vault.create(path, markdown);
+						created++;
+					}
 				}
 			}
 
 			// Zapamiętujemy datę najnowszej aktywności — od niej ruszy kolejny sync.
+			//
+			// UWAGA: liczymy z `activities`, czyli ze WSZYSTKICH pobranych, także
+			// z pominiętych treningów siłowych. Gdybyśmy liczyli tylko z zapisanych,
+			// najnowszy trening siłowy blokowałby znacznik i przy każdym syncu
+			// pobieralibyśmy go od nowa — bez sensu przy limitach Stravy.
 			//
 			// Robimy to TYLKO wtedy, gdy przeszliśmy wszystkie strony. Gdybyśmy
 			// przerwali na limicie, przesunięcie znacznika mogłoby trwale
@@ -305,8 +320,11 @@ export default class StravaSync extends Plugin {
 			const limitInfo = rateLimit
 				? ` (limit 15 min: ${rateLimit.shortTermUsage}/${rateLimit.shortTermLimit}, dzienny: ${rateLimit.dailyUsage}/${rateLimit.dailyLimit})`
 				: '';
+			// O pominiętych mówimy wprost, żeby nie wyglądało, że coś zginęło.
+			const skippedInfo =
+				skipped > 0 ? `, pominięte siłowe ${skipped}` : '';
 			new Notice(
-				`Strava: nowe notatki ${created}, zaktualizowane ${updated}${limitInfo}`,
+				`Strava: nowe notatki ${created}, zaktualizowane ${updated}${skippedInfo}${limitInfo}`,
 			);
 		} catch (error: unknown) {
 			// Trzy typowe scenariusze rozróżniamy, żeby dać konkretną radę.

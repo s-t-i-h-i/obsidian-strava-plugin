@@ -14,6 +14,9 @@ sync activities into notes with `date` and `title` properties.
 - **Sync** activities, from settings or the command palette.
 - **One note per activity**, named after the Strava activity ID, with `date`
   and `title` properties plus a short stats block.
+- **Skips strength training** (`WeightTraining`), which usually already reaches
+  the vault through the hevy-sync plugin. The skip list is a single line in
+  [src/filter.ts](src/filter.ts).
 - **Built around Strava's rate limits**: 200 activities per request,
   incremental sync, no per-activity detail calls, and a safety margin read from
   the `X-RateLimit-*` response headers.

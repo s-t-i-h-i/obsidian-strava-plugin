@@ -16,6 +16,10 @@ Trzy rzeczy, nic więcej:
    folderze, z właściwościami `date` i `title` (dokładnie w takim samym
    formacie jak w pluginie `hevy-sync`).
 
+**Wyjątek: treningi siłowe są pomijane.** Trafiają do Obsidiana z pluginu
+`hevy-sync`, więc notatka ze Stravy byłaby duplikatem — szczegóły w
+[sekcji 5](#5-pomijanie-treningów-siłowych).
+
 Obie akcje są dostępne w **dwóch miejscach**:
 
 - w **Ustawienia → Strava sync** (przyciski),
@@ -149,7 +153,51 @@ Po każdej synchronizacji komunikat pokazuje aktualne zużycie limitu, np.
 
 ---
 
-## 5. Co jest w którym pliku
+## 5. Pomijanie treningów siłowych
+
+Treningi siłowe masz już w Obsidianie z pluginu `hevy-sync`, a Hevy wysyła je
+też do Stravy — bez filtra każdy taki trening miałby **dwie** notatki.
+Dlatego plugin pobiera je ze Stravy, ale **nie tworzy z nich notatek**.
+
+Odpowiada za to jeden plik: `src/filter.ts`. Cała decyzja to jedna lista:
+
+```ts
+const SKIPPED_SPORT_TYPES = new Set<string>(['WeightTraining']);
+```
+
+`WeightTraining` to dokładnie to, co Strava pokazuje po polsku jako **„Trening
+siłowy"** — i tak właśnie oznaczane są treningi wyeksportowane z Hevy.
+
+**Chcesz pomijać coś jeszcze?** Dopisz nazwę do tej listy i przebuduj plugin
+(`npm run build`). Przydatne nazwy ze Stravy:
+
+| Nazwa w kodzie | Co to jest |
+| --- | --- |
+| `Crossfit` | Crossfit |
+| `Workout` | ogólne „Trening" |
+| `HighIntensityIntervalTraining` | HIIT |
+| `Yoga`, `Pilates` | joga, pilates |
+
+Trzy szczegóły, które warto rozumieć:
+
+- **Sprawdzamy dwa pola.** Strava ma nowsze `sport_type` i starsze `type`.
+  Przy starych aktywnościach jedno bywa puste, więc wystarczy, że którekolwiek
+  pasuje.
+- **Znacznik ostatniej synchronizacji liczy się ze wszystkich pobranych
+  aktywności, także pominiętych.** Gdyby liczył się tylko z zapisanych, to
+  najnowszy trening siłowy blokowałby znacznik i przy każdym syncu
+  pobieralibyśmy go od nowa — czysta strata limitu.
+- **Komunikat mówi wprost, ile pominięto**, np.
+  `Strava: nowe notatki 3, zaktualizowane 0, pominięte siłowe 2` — żeby nie
+  wyglądało, że coś zginęło po drodze.
+
+> **Uwaga:** filtr działa od teraz. Jeśli przed tą zmianą zdążyłeś już
+> zsynchronizować treningi siłowe, ich notatki dalej leżą w folderze —
+> plugin ich nie usuwa. Trzeba je skasować ręcznie.
+
+---
+
+## 6. Co jest w którym pliku
 
 Kod jest podzielony na małe pliki — każdy odpowiada za jedną rzecz. Cały jest
 opisany komentarzami po polsku.
@@ -161,6 +209,7 @@ src/
   oauth.ts       ← logowanie do Stravy
   stravaApi.ts   ← zapytania do API Stravy i obsługa limitów
   format.ts      ← zamiana danych na tekst notatki
+  filter.ts      ← które aktywności pomijamy (treningi siłowe)
   types.ts       ← opis kształtu danych ze Stravy
 ```
 
@@ -222,6 +271,12 @@ Funkcje pomocnicze: `formatDuration()` (2712 s → `45:12`), `formatPace()`
 (dystans + czas → `4:48 /km`), `toYamlValue()` (opakowuje tytuł w cudzysłowy,
 gdy trzeba).
 
+### `src/filter.ts`
+
+Najmniejszy plik w projekcie: lista pomijanych typów sportu i jedna funkcja
+`isSkippedActivity()`, która odpowiada „tak/nie". Opisany w
+[sekcji 5](#5-pomijanie-treningów-siłowych).
+
 ### `src/settings.ts`
 
 Dwie rzeczy:
@@ -246,7 +301,8 @@ Spina całość:
 - `ensureFreshToken()` — pilnuje, żeby token był ważny (odświeża z 5-minutowym
   zapasem),
 - `syncActivities(fullSync)` — właściwa synchronizacja: pętla po stronach,
-  bezpiecznik limitów, zapis notatek, aktualizacja znacznika czasu,
+  bezpiecznik limitów, odsianie treningów siłowych, zapis notatek,
+  aktualizacja znacznika czasu,
 - `ensureFolder()` — tworzy folder na notatki, jeśli go nie ma.
 
 Jeden szczegół wart uwagi: **znacznik ostatniej synchronizacji jest zapisywany
@@ -256,14 +312,14 @@ pobrały.
 
 ---
 
-## 6. Lista zmian względem wyjściowego szablonu
+## 7. Lista zmian względem wyjściowego szablonu
 
 Projekt startował z oficjalnego `obsidian-sample-plugin`. Co się zmieniło:
 
 **Nowe pliki:**
 
-- `src/types.ts`, `src/stravaApi.ts`, `src/oauth.ts`, `src/format.ts` — logika
-  pluginu.
+- `src/types.ts`, `src/stravaApi.ts`, `src/oauth.ts`, `src/format.ts`,
+  `src/filter.ts` — logika pluginu.
 - `INSTRUKCJA.md` — ten plik.
 
 **Przepisane od zera:**
@@ -293,7 +349,7 @@ deklaratywne API ustawień z Obsidiana 1.13. Żadne z nich niczego nie psuje.
 
 ---
 
-## 7. Gdy coś nie działa
+## 8. Gdy coś nie działa
 
 | Objaw | Przyczyna i rozwiązanie |
 | --- | --- |
@@ -302,5 +358,6 @@ deklaratywne API ustawień z Obsidiana 1.13. Żadne z nich niczego nie psuje.
 | `Strava odrzuciła żądanie tokenu (HTTP 400)` | Literówka w Client ID lub Client Secret. |
 | `Strava odrzuciła token dostępu` | Cofnięta zgoda po stronie Stravy. Kliknij Disconnect, potem Connect jeszcze raz. |
 | `Przekroczono limit zapytań` | Odczekaj do najbliższej pełnej kwadransa (00, 15, 30, 45) i spróbuj ponownie. |
+| Brak notatki z treningu siłowego | Tak ma być — patrz [sekcja 5](#5-pomijanie-treningów-siłowych). Masz go już z `hevy-sync`. |
 | Brak nowych notatek mimo nowych treningów | Aktywność ma datę **starszą** niż ostatni sync (np. dograna z pliku GPX). Użyj `Full sync`. |
 | Plugin nie pojawia się na liście | Sprawdź, czy jest `main.js` (`npm run build`) i czy `id` w `manifest.json` zgadza się z nazwą folderu. |
