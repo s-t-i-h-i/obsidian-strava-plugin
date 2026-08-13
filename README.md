@@ -1,92 +1,80 @@
-# Obsidian Sample Plugin
+# Strava sync
 
-This is a sample plugin for Obsidian (https://obsidian.md).
+An Obsidian plugin that creates one note per Strava activity.
 
-This project uses TypeScript to provide type checking and documentation.
-The repo depends on the latest plugin API (obsidian.d.ts) in TypeScript Definition format, which contains TSDoc comments describing what it does.
+Minimal by design — it does two things: connect your Strava account (OAuth) and
+sync activities into notes with `date` and `title` properties.
 
-This sample plugin demonstrates some of the basic functionality the plugin API can do.
+> A detailed, beginner-friendly walkthrough in Polish lives in
+> [INSTRUKCJA.md](INSTRUKCJA.md).
 
-- Adds a ribbon icon, which shows a Notice when clicked.
-- Adds a command "Open modal (simple)" which opens a Modal.
-- Adds a plugin setting tab to the settings page.
-- Registers a global click event and outputs a Notice on click.
-- Registers a global interval which logs 'setInterval' to the console.
+## Features
 
-## First time developing plugins?
+- **OAuth login** to Strava, from settings or the command palette.
+- **Sync** activities, from settings or the command palette.
+- **One note per activity**, named after the Strava activity ID, with `date`
+  and `title` properties plus a short stats block.
+- **Built around Strava's rate limits**: 200 activities per request,
+  incremental sync, no per-activity detail calls, and a safety margin read from
+  the `X-RateLimit-*` response headers.
 
-Quick starting guide for new plugin devs:
+## Setup
 
-- Check if [someone already developed a plugin for what you want](https://obsidian.md/plugins)! There might be an existing plugin similar enough that you can partner up with.
-- Make a copy of this repo as a template with the "Use this template" button (login to GitHub if you don't see it).
-- Clone your repo to a local development folder. For convenience, you can place this folder in your `.obsidian/plugins/your-plugin-name` folder.
-- Install NodeJS, then run `npm i` in the command line under your repo folder.
-- Run `npm run dev` to compile your plugin from `src/main.ts` to `main.js`.
-- Make changes to `src/main.ts` (or create new `.ts` files). Those changes should be automatically compiled into `main.js`.
-- Reload Obsidian to load the new version of your plugin.
-- Enable plugin in settings window.
-- For updates to the Obsidian API run `npm update` in the command line under your repo folder.
+1. Build the plugin:
 
-## Releasing new releases
+    ```bash
+    npm install && npm run build
+    ```
 
-- Update your `manifest.json` with your new version number, such as `1.0.1`, and the minimum Obsidian version required for your latest release.
-- Update your `versions.json` file with `"new-plugin-version": "minimum-obsidian-version"` so older versions of Obsidian can download an older version of your plugin that's compatible.
-- Create new GitHub release using your new version number as the "Tag version". Use the exact version number, don't include a prefix `v`. See here for an example: https://github.com/obsidianmd/obsidian-sample-plugin/releases
-- Upload the files `manifest.json`, `main.js`, `styles.css` as binary attachments. Note: The manifest.json file must be in two places, first the root path of your repository and also in the release.
-- Publish the release.
+2. Create an API application at <https://www.strava.com/settings/api> and set
+   **Authorization Callback Domain** to `localhost`.
+3. In **Settings → Strava sync**, paste your **Client ID** and
+   **Client secret**, then select **Connect to Strava**.
+4. Select **Sync now**.
 
-> You can simplify the version bump process by running `npm version patch`, `npm version minor` or `npm version major` after updating `minAppVersion` manually in `manifest.json`.
-> The command will bump version in `manifest.json` and `package.json`, and add the entry for the new version to `versions.json`
+## Commands
 
-## Adding your plugin to the community plugin list
+- `Strava sync: Connect to Strava`
+- `Strava sync: Sync activities`
 
-- Check the [plugin guidelines](https://docs.obsidian.md/Plugins/Releasing/Plugin+guidelines).
-- Publish an initial version.
-- Make sure you have a `README.md` file in the root of your repo.
-- Make a pull request at https://github.com/obsidianmd/obsidian-releases to add your plugin.
+## Note format
 
-## How to use
+```markdown
+---
+date: 2025-08-12
+title: Morning Run
+---
 
-- Clone this repo.
-- Make sure your NodeJS is at least v18 (`node --version`).
-- `npm i` to install dependencies.
-- `npm run dev` to start compilation in watch mode.
+# Morning Run
 
-## Manually installing the plugin
+2025-08-12T06:31:00
 
-- Copy over `main.js`, `styles.css`, `manifest.json` to your vault `VaultFolder/.obsidian/plugins/your-plugin-id/`.
+## Stats
+- Sport: Run
+- Distance: 10.05 km
+- Moving time: 48:12
+- Average pace: 4:48 /km
+- Average heart rate: 152 bpm
 
-## Improve code quality with eslint
-
-- [ESLint](https://eslint.org/) is a tool that analyzes your code to quickly find problems. You can run ESLint against your plugin to find common bugs and ways to improve your code.
-- This project already has eslint preconfigured, you can invoke a check by running`npm run lint`
-- Together with a custom eslint [plugin](https://github.com/obsidianmd/eslint-plugin) for Obsidan specific code guidelines.
-- A GitHub action is preconfigured to automatically lint every commit on all branches.
-
-## Funding URL
-
-You can include funding URLs where people who use your plugin can financially support it.
-
-The simple way is to set the `fundingUrl` field to your link in your `manifest.json` file:
-
-```json
-{
-	"fundingUrl": "https://buymeacoffee.com"
-}
+[View on Strava](https://www.strava.com/activities/14567890123)
 ```
 
-If you have multiple URLs, you can also do:
+## Notes
 
-```json
-{
-	"fundingUrl": {
-		"Buy Me a Coffee": "https://buymeacoffee.com",
-		"GitHub Sponsor": "https://github.com/sponsors",
-		"Patreon": "https://www.patreon.com/"
-	}
-}
-```
+- **Desktop only.** Login uses a short-lived local HTTP server on `localhost`,
+  because Strava requires a real callback domain and does not accept custom
+  protocols such as `obsidian://`.
+- Your tokens and client secret are stored in `data.json` inside the plugin
+  folder and are never sent anywhere except to Strava. That file is gitignored —
+  do not share it.
+- Scope requested is `activity:read_all` (read only, including private
+  activities). The plugin never writes to Strava.
 
-## API Documentation
+## Privacy
 
-See https://docs.obsidian.md
+The plugin talks to `www.strava.com` only, and only when you connect or sync.
+No telemetry, no third-party services.
+
+## License
+
+0-BSD — see [LICENSE](LICENSE).
